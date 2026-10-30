@@ -68,6 +68,9 @@ public final class BlueprintExporter {
      * therefore declares no hard dependency on either.
      */
     private static void onClientSetup(net.neoforged.fml.event.lifecycle.FMLClientSetupEvent event) {
+        // Resolved once, here, so the log says which way the gate went before any other code
+        // can ask it - and so a session that never opens the exporter still leaves its line.
+        ExportGate.logState();
         if (!net.neoforged.fml.ModList.get().isLoaded("sable_schematic_api")) {
             LOGGER.info("blueprint tool not present; skipping the export mode");
             return;
@@ -103,27 +106,50 @@ public final class BlueprintExporter {
      * Client-side command, because the bake needs baked models and they only exist
      * on the client. Registered on the game bus so a mod with no common-side code
      * still loads on a dedicated server without a class-loading failure.
+     *
+     * <p>Every branch is wrapped in {@link #gate} instead of calling its body directly:
+     * with Fire Control Eye installed the whole command answers one sentence and writes
+     * nothing, and putting the refusal at the registration site is the only shape a
+     * branch added later cannot accidentally bypass.
      */
     private static void onRegisterClientCommands(RegisterClientCommandsEvent event) {
         event.getDispatcher().register(
             Commands.literal("sableexport")
                 .then(Commands.literal("where")
-                    .executes(ctx -> {
+                    .executes(ctx -> gate(ctx.getSource(), () -> {
                         BlueprintBake.reportDirs(ctx.getSource());
                         return 1;
-                    }))
+                    })))
                 .then(Commands.literal("gui")
-                    .executes(ctx -> {
+                    .executes(ctx -> gate(ctx.getSource(), () -> {
                         Minecraft.getInstance().setScreen(new BlueprintExportScreen());
                         return 1;
-                    }))
+                    })))
                 .then(Commands.literal("all")
-                    .executes(ctx -> run(ctx.getSource(), null)))
+                    .executes(ctx -> gate(ctx.getSource(), () -> run(ctx.getSource(), null))))
                 .then(Commands.argument("name", StringArgumentType.string())
-                    .executes(ctx -> run(ctx.getSource(),
-                        StringArgumentType.getString(ctx, "name"))))
-                .executes(ctx -> run(ctx.getSource(), null))
+                    .executes(ctx -> gate(ctx.getSource(),
+                        () -> run(ctx.getSource(), StringArgumentType.getString(ctx, "name")))))
+                .executes(ctx -> gate(ctx.getSource(), () -> run(ctx.getSource(), null)))
         );
+    }
+
+    /**
+     * Runs {@code body} only when {@link ExportGate} is open; otherwise answers and stops.
+     *
+     * <p>The body is a supplier rather than a plain value so a refused branch never even
+     * evaluates its arguments: {@code /sableexport gui} must not build a screen and
+     * {@code /sableexport where} must not walk the schematic folders. Nothing is written
+     * on the refused path, which is the whole point - no second copy of the blueprint
+     * appears in the output folder behind Fire Control Eye's back.
+     */
+    private static int gate(net.minecraft.commands.CommandSourceStack source,
+                            java.util.function.Supplier<Integer> body) {
+        if (!ExportGate.enabled()) {
+            source.sendFailure(ExportGate.message());
+            return 0;
+        }
+        return body.get();
     }
 
     private static int run(net.minecraft.commands.CommandSourceStack source, String name) {

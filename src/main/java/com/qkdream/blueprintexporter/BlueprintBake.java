@@ -197,6 +197,14 @@ public final class BlueprintBake {
     public static List<Outcome> bakeAll(List<Candidate> targets,
                                         java.util.function.Consumer<Outcome> progress) {
         List<Outcome> out = new ArrayList<>();
+        if (ExportGate.disabled()) {
+            // One failed line per request rather than an empty list: a screen renders an empty
+            // list as "exported 0/0", which reads like success, and nothing here wrote a file.
+            for (Candidate target : targets) {
+                out.add(new Outcome(target.name, false, ExportGate.DISABLED_TEXT));
+            }
+            return out;
+        }
         for (Candidate target : targets) {
             Outcome outcome;
             try {
@@ -216,6 +224,13 @@ public final class BlueprintBake {
     }
 
     public static int run(net.minecraft.commands.CommandSourceStack source, String name) throws IOException {
+        // Second lock, behind the command's own gate: this method is public, so it is the
+        // command that calls it today but not necessarily the only caller later. Answering
+        // here too means the refusal cannot be lost by a new entry point.
+        if (ExportGate.disabled()) {
+            source.sendFailure(ExportGate.message());
+            return 0;
+        }
         Minecraft mc = Minecraft.getInstance();
         Level level = mc.level;
         if (level == null) {
@@ -461,6 +476,9 @@ public final class BlueprintBake {
 
     /** Bake one blueprint by path. Returns the triangle count. */
     public static int bake(Path nbt) throws IOException {
+        // The last check before anything is written: every entry point above is gated, and
+        // this is the one that would actually create files, so it refuses on its own.
+        ExportGate.requireOpen();
         Minecraft mc = Minecraft.getInstance();
         Level level = mc.level;
         if (level == null) {
@@ -478,6 +496,9 @@ public final class BlueprintBake {
      * those bytes would survive a formal {@code StructureTemplate.load}.
      */
     public static int bake(CompoundTag root, String name) throws IOException {
+        // Same lock as the path overload: the tool page comes in here, so it needs the check
+        // where the write happens rather than only on the button that leads to it.
+        ExportGate.requireOpen();
         Minecraft mc = Minecraft.getInstance();
         Level level = mc.level;
         if (level == null) {

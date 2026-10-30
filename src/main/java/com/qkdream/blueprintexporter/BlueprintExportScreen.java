@@ -39,7 +39,12 @@ public class BlueprintExportScreen extends Screen {
     @Override
     protected void init() {
         candidates.clear();
-        candidates.addAll(BlueprintBake.listBlueprints());
+        // A refused screen must not look like it is about to export something, so nothing is
+        // scanned and every button below is built inert: the list stays empty rather than
+        // offering files that clicking cannot export.
+        if (ExportGate.enabled()) {
+            candidates.addAll(BlueprintBake.listBlueprints());
+        }
 
         int listHeight = Math.max(40, height - 44 - 60);
         list = new BlueprintList(minecraft, width, listHeight, 44, 24);
@@ -50,27 +55,24 @@ public class BlueprintExportScreen extends Screen {
 
         int bottom = height - 52;
 
-        addRenderableWidget(Button.builder(Component.literal("Export selected"),
-                b -> exportSelected())
-                .bounds(width / 2 - 154, bottom, 150, 20).build());
+        addRenderableWidget(button(Component.literal("Export selected"),
+            this::exportSelected, width / 2 - 154, bottom, 150, 20));
 
-        addRenderableWidget(Button.builder(Component.literal("Export all"),
-                b -> exportAll())
-                .bounds(width / 2 + 4, bottom, 150, 20).build());
+        addRenderableWidget(button(Component.literal("Export all"),
+            this::exportAll, width / 2 + 4, bottom, 150, 20));
 
-        addRenderableWidget(Button.builder(Component.literal("Open output folder"),
-                b -> {
-                    try {
-                        Util.getPlatform().openFile(BlueprintBake.outputDir().toFile());
-                    } catch (Exception e) {
-                        status = "cannot open output folder: " + e;
-                    }
-                })
-                .bounds(width / 2 - 154, bottom + 24, 150, 20).build());
+        addRenderableWidget(button(Component.literal("Open output folder"),
+            this::openOutput, width / 2 - 154, bottom + 24, 150, 20));
 
-        addRenderableWidget(Button.builder(Component.literal("Refresh"),
-                b -> rebuildWidgets())
-                .bounds(width / 2 + 4, bottom + 24, 150, 20).build());
+        addRenderableWidget(button(Component.literal("Refresh"),
+            this::rebuildWidgets, width / 2 + 4, bottom + 24, 150, 20));
+
+        if (ExportGate.disabled()) {
+            // The reason is drawn by render(); a status line quoting a path would be a lie
+            // about a session that is not allowed to write there.
+            status = "";
+            return;
+        }
 
         if (candidates.isEmpty()) {
             StringBuilder sb = new StringBuilder("No .nbt found. Searched:");
@@ -83,7 +85,44 @@ public class BlueprintExportScreen extends Screen {
         }
     }
 
+    /**
+     * A button that is greyed rather than removed while the export gate is shut.
+     *
+     * <p>Greying keeps the screen's shape, so the player can see what would have been
+     * offered and read the one line that explains why none of it works. {@code active} is
+     * the vanilla flag {@code AbstractWidget} itself checks before dispatching a click, so
+     * an inert button cannot be clicked even from a stale frame.
+     */
+    private Button button(Component label, Runnable action, int x, int y, int width, int height) {
+        Button built = Button.builder(label, ignored -> action.run())
+            .bounds(x, y, width, height)
+            .build();
+        built.active = ExportGate.enabled();
+        return built;
+    }
+
+    /**
+     * Opens the output folder - but only while the gate is open, because
+     * {@link BlueprintBake#outputDir()} creates the folder as a side effect and a refused
+     * session must leave the game directory exactly as it found it.
+     */
+    private void openOutput() {
+        if (ExportGate.disabled()) {
+            status = ExportGate.DISABLED_TEXT;
+            return;
+        }
+        try {
+            Util.getPlatform().openFile(BlueprintBake.outputDir().toFile());
+        } catch (Exception e) {
+            status = "cannot open output folder: " + e;
+        }
+    }
+
     private void exportSelected() {
+        if (ExportGate.disabled()) {
+            status = ExportGate.DISABLED_TEXT;
+            return;
+        }
         BlueprintList.Entry chosen = list == null ? null : list.getSelected();
         if (chosen == null) {
             status = "Select a blueprint first";
@@ -93,6 +132,10 @@ public class BlueprintExportScreen extends Screen {
     }
 
     private void exportAll() {
+        if (ExportGate.disabled()) {
+            status = ExportGate.DISABLED_TEXT;
+            return;
+        }
         if (candidates.isEmpty()) {
             status = "Nothing to export";
             return;
@@ -101,6 +144,13 @@ public class BlueprintExportScreen extends Screen {
     }
 
     private void runExport(List<BlueprintBake.Candidate> targets) {
+        // The buttons are inert when the gate is shut, so reaching here means the gate was
+        // open when the click was queued; re-checking costs nothing and is the last place a
+        // bake could start writing files.
+        if (ExportGate.disabled()) {
+            status = ExportGate.DISABLED_TEXT;
+            return;
+        }
         // Close first: the bake blocks, and a frozen screen over it would only make
         // the game look hung. Chat gets the per-file result instead.
         Minecraft mc = Minecraft.getInstance();
@@ -130,6 +180,17 @@ public class BlueprintExportScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
         graphics.drawCenteredString(font, title, width / 2, 12, 0xFFFFFF);
+        if (ExportGate.disabled()) {
+            // The reason, in the one place the player is already looking. The output path is
+            // deliberately not drawn: resolving it would create the folder, and a refused
+            // session must leave the game directory exactly as it found it.
+            graphics.drawCenteredString(font, ExportGate.label(),
+                width / 2, 30, 0xFF5555);
+            graphics.drawCenteredString(font,
+                Component.literal("Fire Control Eye is installed; this screen is read-only."),
+                width / 2, height - 14, 0xA0A0A0);
+            return;
+        }
         graphics.drawCenteredString(font,
             Component.literal("Output: " + BlueprintBake.outputDirSafe()),
             width / 2, 26, 0xA0A0A0);

@@ -7,6 +7,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.ScrollerView;
 import com.qkdream.blueprintexporter.BlueprintBake;
 import com.qkdream.blueprintexporter.BlueprintExporter;
+import com.qkdream.blueprintexporter.ExportGate;
 import dev.rew1nd.sableschematicapi.tool.client.session.BlueprintToolClientSession;
 import dev.rew1nd.sableschematicapi.tool.client.storage.BlueprintToolLocalFiles;
 import dev.rew1nd.sableschematicapi.tool.ui.BlueprintToolUiKit;
@@ -78,6 +79,16 @@ public final class BlueprintExportPage {
         });
         reveal.setOnClick(event -> openOutput(player));
 
+        // Greyed rather than hidden, and set on the widget instead of only inside the click
+        // handler: setActive(false) is LDLib2's own "this element does not take a click" flag,
+        // so the buttons go dead without the page changing shape. The hint label below carries
+        // the reason, and the handlers still re-check the gate in case a stale page survives
+        // a mod-list change it never saw.
+        boolean open = ExportGate.enabled();
+        exportOne.setActive(open);
+        exportAll.setActive(open);
+        reveal.setActive(open);
+
         UIElement toolbar = new UIElement().layout(layout -> {
             layout.width(360.0F);
             layout.height(16.0F);
@@ -98,7 +109,11 @@ public final class BlueprintExportPage {
 
     private static Label hint() {
         Label label = BlueprintToolUiKit.bareLabel(Horizontal.LEFT);
-        label.setText(Component.translatable("blueprintexporter.page.hint"));
+        // With the gate shut this label is the page's only explanation, so it carries the
+        // refusal in place of the usual help text - no extra child, so no layout change.
+        label.setText(ExportGate.disabled()
+            ? ExportGate.label()
+            : Component.translatable("blueprintexporter.page.hint"));
         label.layout(layout -> {
             layout.width(360.0F);
             layout.height(28.0F);
@@ -110,9 +125,28 @@ public final class BlueprintExportPage {
         return Component.translatable("blueprintexporter." + key, args);
     }
 
+    /**
+     * Answers with the refusal when the gate is shut, and returns whether the caller must stop.
+     *
+     * <p>The buttons are inactive in that case, so this normally cannot be reached; it is the
+     * second lock, for a page built before the gate was resolved or a click already queued.
+     */
+    private static boolean refuse(Player player) {
+        if (ExportGate.enabled()) {
+            return false;
+        }
+        if (player != null) {
+            player.displayClientMessage(ExportGate.message(), false);
+        }
+        return true;
+    }
+
     // ----------------------------------------------------------------- actions
 
     private static void exportSelected(Player player) {
+        if (refuse(player)) {
+            return;
+        }
         BlueprintToolLocalFiles.Entry entry = BlueprintToolClientSession.selectedBlueprint();
         if (entry == null) {
             BlueprintToolClientSession.setStatusKey("select_file");
@@ -123,6 +157,9 @@ public final class BlueprintExportPage {
     }
 
     private static void exportAll(Player player) {
+        if (refuse(player)) {
+            return;
+        }
         List<BlueprintToolLocalFiles.Entry> all = BlueprintToolClientSession.localBlueprints();
         if (all.isEmpty()) {
             BlueprintToolClientSession.setStatusKey("no_local_schematics");
@@ -133,6 +170,11 @@ public final class BlueprintExportPage {
     }
 
     private static void openOutput(Player player) {
+        // Opening the folder would create it - outputDir() makes the directory on the way -
+        // so a refused page must not go through here at all.
+        if (refuse(player)) {
+            return;
+        }
         try {
             net.minecraft.Util.getPlatform().openFile(BlueprintBake.outputDir().toFile());
         } catch (Throwable t) {
