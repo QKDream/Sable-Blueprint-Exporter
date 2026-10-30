@@ -1,0 +1,68 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+issueTrackerURL = "https://example.invalid"
+
+[[mods]]
+modId = "blueprintexporter"
+version = "1.0.0"
+displayName = "Sable Blueprint Exporter"
+authors = "qkdream"
+description = '''
+Bakes a Sable blueprint (.nbt) through the real Minecraft block-model pipeline and
+writes it out as OBJ + MTL + the referenced PNG textures, for import into Blender.
+
+It reads the same way the game does - Create's StructureTemplate load, then
+StructureTemplate.placeInWorld into a catnip SchematicLevel, then
+ModelBlockRenderer.tesselateBlock per block - so every mod's models, Copycats+
+model cores, block-entity ModelData and block-entity renderers all resolve exactly
+as they do in game. That is precisely what the built-in isometric preview does.
+
+If the Sable blueprint tool (sable_schematic_api) is installed, an Export mode is
+added to it, beside the library, delete and sub-level modes. Otherwise the
+/sableexport command does the same job.
+'''
+
+[[dependencies.blueprintexporter]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.blueprintexporter]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.blueprintexporter]]
+modId = "create"
+type = "required"
+versionRange = "[6.0.0,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.blueprintexporter]]
+modId = "sable"
+type = "required"
+versionRange = "[2.0.0,)"
+ordering = "NONE"
+side = "BOTH"
+
+# The blueprint tool is optional: the export mode is only added when it is present,
+# and the command works without it.
+[[dependencies.blueprintexporter]]
+modId = "sable_schematic_api"
+type = "optional"
+versionRange = "[1.0.0,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.blueprintexporter]]
+modId = "ldlib2"
+type = "optional"
+versionRange = "[2.0.0,)"
+ordering = "NONE"
+side = "CLIENT"
