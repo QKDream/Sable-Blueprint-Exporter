@@ -1,0 +1,9 @@
+{
+  "blueprintexporter.mode.export": "导出",
+  "blueprintexporter.page.hint": "用游戏自身的模型管线烘焙选中的蓝图，把 OBJ + MTL 写到 sable_export/。先在左侧选中蓝图，再按导出按钮。",
+  "key.blueprintexporter.open": "打开蓝图导出",
+  "key.categories.blueprintexporter": "Sable 蓝图导出器",
+  "sable_schematic_api.blueprint_tool.ui.export_selected": "导出选中",
+  "sable_schematic_api.blueprint_tool.ui.export_all": "导出全部",
+  "sable_schematic_api.blueprint_tool.ui.open_output": "打开输出文件夹"
+}
