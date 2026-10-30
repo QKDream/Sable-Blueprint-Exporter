@@ -1,0 +1,9 @@
+{
+  "blueprintexporter.mode.export": "Export",
+  "blueprintexporter.page.hint": "Bakes the selected blueprint through the game's own model pipeline and writes OBJ + MTL into sable_export/. Select a blueprint on the left, then press the export button.",
+  "key.blueprintexporter.open": "Open Blueprint Export",
+  "key.categories.blueprintexporter": "Sable Blueprint Exporter",
+  "sable_schematic_api.blueprint_tool.ui.export_selected": "Export selected",
+  "sable_schematic_api.blueprint_tool.ui.export_all": "Export all",
+  "sable_schematic_api.blueprint_tool.ui.open_output": "Open output folder"
+}
